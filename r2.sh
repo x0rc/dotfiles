@@ -13,8 +13,8 @@ SCRIPTNAME=x0r.sh
 CLUSTER_NAME=iwcommerce-dev
 
 # variables moved from local to global
-awsprofile=""
-
+# need to fetch $PROFILE $CLUSTER_NAME 
+# from aws_setup() to make get_kubeconfig() independent.
 
 # unicorn puke:
     red=$'\e[1;31m'
@@ -40,6 +40,20 @@ awsprofile=""
 
 #####################################
 
+counter(){
+    p=17;#readingdocsisimportant
+    next_n2=$[$p+1]
+    sed -i "/#readingdocsisimportant$/s/=.*#/=$next_n2;#/" ${0}
+    if [ $p == 0 ]; then
+    readme
+    fi
+}
+
+x(){
+    echo "This is testing function; arg --test"
+}
+
+
 progress_bar () {
     for ((k = 0; k <= 10 ; k++))
     do
@@ -54,13 +68,71 @@ progress_bar () {
     echo
 }
 
-status_pods () {
-    kubectl get pods -o wide -l 'app in (iwjwt,iwapi,iwshop,iwadmin,adminer,mailhog,test)' 2>/dev/null
-    # if [ $? == 0 ]; then
-    # echo "$red No pods are available at the moment."
-    # echo "$red Call 0-800-SOMEONESGONNAGETFIRED!"
-    # fi   
-}
+status_pods () (
+
+    # kubectl get pods -l 'app in (iwjwt,iwapi,iwshop,iwadmin,adminer,mailhog,test)'
+    mailhogchk() {
+        echo "$green"
+    if [[ $(kubectl get pods -l app=mailhog -o wide --no-headers 2>&1 | grep -w 'mailhog') = *mailhog* ]]; then
+            kubectl get pods -l app=mailhog -o wide --no-headers | grep -w 'mailhog' 
+        else
+            echo "$red Mailhog is missing."
+    fi
+    }
+
+    adminerchk() {
+        echo "$green"
+    if [[ $(kubectl get pods -l app=adminer -o wide --no-headers 2>&1 | grep -w 'adminer') = *adminer* ]]; then
+            kubectl get pods -l app=adminer -o wide --no-headers | grep -w 'adminer'
+        else
+            echo -e "\n$red$bold [!] Adminer is missing.\n"
+    fi
+    }
+
+    iwadminchk() {
+        echo "$green"
+    if [[ $(kubectl get pods -l app=iwadmin -o wide --no-headers 2>&1 | grep -w 'iwadmin') = *iwadmin* ]]; then
+            kubectl get pods -l app=iwadmin -o wide --no-headers | grep -w 'iwadmin'
+        else
+            echo -e "\n$red$bold [!] IWADMIN is missing.\n"
+    fi
+    }
+
+    iwjwtchk() {
+        echo "$green"
+    if [[ $(kubectl get pods -l app=iwjwt -o wide --no-headers 2>&1 | grep -w 'iwjwt') = *iwjwt* ]]; then
+            kubectl get pods -l app=iwjwt -o wide --no-headers | grep -w 'iwjwt'
+        else
+            echo -e "\n$red$bold [!] IWJWT is missing.\n"
+    fi
+    }
+
+    iwapichk() {
+        echo "$green"
+    if [[ $(kubectl get pods -l app=iwapi -o wide --no-headers 2>&1 | grep -w 'iwapi') = *iwapi* ]]; then
+            kubectl get pods -l app=iwapi -o wide --no-headers | grep -w 'iwapi' 
+        else
+            echo -e "\n$red$bold [!] IWAPI is missing.\n"
+    fi
+    }
+
+    iwshopchk() {
+        echo "$green"    
+    if [[ $(kubectl get pods -l app=iwshop -o wide --no-headers 2>&1 | grep -w 'iwshop') = *iwshop* ]]; then
+            kubectl get pods -l app=iwshop -o wide --no-headers | grep -w 'iwshop'
+        else
+            echo -e "\n$red$bold [!] IWSHOP is missing.\n"
+    fi
+    }
+
+    iwjwtchk
+    iwapichk
+    iwshopchk
+    iwadminchk
+    adminerchk
+    mailhogchk
+)
+
 
 iwjwt () {
     echo "$green" $(progress_bar)
@@ -130,9 +202,9 @@ aws_setup () {
     # aws cli configuration / one liner
     aws configure --profile $PROFILE set aws_access_key_id $aws_access_key_id; aws configure --profile $PROFILE set aws_secret_access_key $aws_secret_access_key; aws configure set default.region $AWS_DEFAULT_REGION
     echo -e "$greenplus $green  Updating your kubeconfig..."
-    aws eks update-kubeconfig --name $CLUSTER_NAME --region $AWS_DEFAULT_REGION --profile $PROFILE
+    kubeconfig="$(aws eks update-kubeconfig --name $CLUSTER_NAME --region $AWS_DEFAULT_REGION --profile $PROFILE 2>&1)"
+    echo "       $kubeconfig"     
     echo -e "$greenplus $green $white$bold Access granted"
-    echo $PROFILE
 
     }
 
@@ -178,7 +250,7 @@ readme () {
 iwck8s_menu () {
     clear
     echo -e "$red Hello $USER,"
-    echo -e "\n $red $bold This is IWCommerce pod manager v2.0"  
+    echo -e "\n $red $bold  This is IWCommerce pod manager v2.0"  
     echo -e "\n    What would you like to do?"
     echo -e "\n Key  Menu Option:             Description:"
     echo -e " ---  ------------             ------------" 
@@ -189,8 +261,8 @@ iwck8s_menu () {
     echo -e "  5 - Connect to adminer       (interactive tty shell session with the pod)"                          # adminer
     echo -e "  6 - Connect to mailhog       (interactive tty shell session with the pod)"                          # mailhog
     echo -e "  S - Status                   (list pods in ps output format)"                                       # status_pods
-    echo -e "  9 - AWS Setup                (configuring your AWS profile)"                       # aws_setup
-    echo -e "  0 - Users Manual             (srsly, read it)"                                                     # readme
+    echo -e "  9 - AWS Setup                (configuring your AWS profile)"                                        # aws_setup
+    echo -e "  0 - Users Manual             (srsly, read it)"                                                      # readme
     echo -e "  H - Help                     (prints the valid command arguments)"    
     echo -e "\n$(weather)"    
     echo -e "\n"                                                                          
@@ -216,11 +288,8 @@ iwck8s_menu () {
     }
 
 iwck8s_menu_help () {
-    # do not edit this echo statement, spacing has been fixed and is correct for display in the terminal
+    # do not edit this echo statement, spacing has been fixed and is correct for display in the terminal                             "
     echo -e "\n $red valid command line arguements are:        "
-    echo " --aws                                         "
-    echo " --kubeconfig                                  "
-    echo -e "\n $red other command line arguements are:  "
     echo " --jwt                                    "
     echo " --api                                    "
     echo " --shop                                   "
@@ -229,7 +298,7 @@ iwck8s_menu_help () {
     echo " --mailhog                                "
     echo " --status                                 "
     echo " --aws                                    "
-    echo " --help                                   "
+    echo " --readme                                 "
 
     exit
     }
@@ -248,6 +317,8 @@ check_arg () {
          --adminer) adminer                          ;;  
           --status) status_pods                      ;;
            --setup) aws_setup                        ;;
+          --readme) readme                           ;;
+            --test) x                                ;;           
         *) iwck8s_menu_help ; exit 0                 ;;
     esac
     fi
@@ -258,10 +329,11 @@ weather() {
 }
 
 exit_screen () {
-    echo "$green$(progress_bar)"
+    echo -e "$green\n$(progress_bar)\n"
     echo -e "$green\n\n    All Done! o7! \n"
     exit
     }
 
+counter
 check_arg "$1"
 exit_screen
